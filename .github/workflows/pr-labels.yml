@@ -11,8 +11,8 @@ on:
       - review_requested
       - review_request_removed
       - edited
-  issue_comment:
-    types: [created, edited, deleted]
+  repository_dispatch:
+    types: [pr_reviewed]
 
 permissions:
   checks: write

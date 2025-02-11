@@ -1,0 +1,16 @@
+name: PR Review Trigger
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+jobs:
+  trigger-label-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger label update
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: pr_reviewed
+          client-payload: '{"pr_number": "${{ github.event.pull_request.number }}", "review_state": "${{ github.event.review.state }}"}'
