@@ -1,0 +1,16 @@
+name: PR Review
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create repository dispatch event
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: pr_review_updated
+          client-payload: '{"pr_number": "${{ github.event.pull_request.number }}"}'
