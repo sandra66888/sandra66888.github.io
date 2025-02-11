@@ -37,10 +37,17 @@ jobs:
             try {
               const { owner, repo } = context.repo;
 
-              // 根据事件类型获取 PR number
-              const pr_number = context.payload.pull_request
-                ? context.payload.pull_request.number
-                : context.payload.issue.number;
+              // 根据不同事件类型获取 PR number
+              let pr_number;
+              if (context.payload.pull_request) {
+                pr_number = context.payload.pull_request.number;
+              } else if (context.payload.issue) {
+                pr_number = context.payload.issue.number;
+              } else if (context.payload.client_payload) {
+                pr_number = context.payload.client_payload.pr_number;
+              } else {
+                throw new Error('Cannot determine PR number');
+              }
 
               // 获取 PR 的所有 reviews
               const reviews = await github.rest.pulls.listReviews({
