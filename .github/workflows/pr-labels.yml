@@ -56,10 +56,19 @@ jobs:
                 pull_number: pr_number
               });
 
-              // 计算 approved 的数量
-              const approvedCount = reviews.data.filter(
+              console.log('All reviews:', JSON.stringify(reviews.data, null, 2));
+
+              // 计算最新的 approved 数量（每个用户只计算最新一次 review）
+              const latestReviews = new Map();
+              reviews.data.forEach(review => {
+                latestReviews.set(review.user.id, review);
+              });
+
+              const approvedCount = Array.from(latestReviews.values()).filter(
                 review => review.state === 'APPROVED'
               ).length;
+
+              console.log('Approved count:', approvedCount);
 
               // 获取当前 PR 的标签
               const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
