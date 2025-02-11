@@ -4,11 +4,23 @@ on:
   pull_request_review:
     types: [submitted, edited, dismissed]
 
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+  actions: read
+
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
       - name: Save review info
-        run: |
-          echo "PR_NUMBER=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
-          echo "REVIEW_STATE=${{ github.event.review.state }}" >> $GITHUB_ENV
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr_number = context.payload.pull_request.number;
+            const review_state = context.payload.review.state;
+            console.log(`Processing PR #${pr_number} with review state: ${review_state}`);
