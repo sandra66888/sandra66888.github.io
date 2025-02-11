@@ -1,0 +1,14 @@
+name: PR Review
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Save review info
+        run: |
+          echo "PR_NUMBER=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+          echo "REVIEW_STATE=${{ github.event.review.state }}" >> $GITHUB_ENV
