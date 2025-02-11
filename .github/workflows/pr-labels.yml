@@ -26,7 +26,7 @@ permissions:
 jobs:
   update-labels:
     # 只在 PR 相关的评论时运行
-    if: ${{ github.event.issue.pull_request || github.event_name == 'pull_request_target' }}
+    if: ${{ github.event.issue.pull_request || github.event_name == 'pull_request_target' || github.event_name == 'repository_dispatch'}}
     runs-on: ubuntu-latest
     steps:
       - name: Update PR labels based on reviews
