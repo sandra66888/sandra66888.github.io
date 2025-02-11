@@ -1,4 +1,4 @@
-name: PR Review Labels
+name: PR Review Label
 
 on:
   pull_request_target:
@@ -6,98 +6,41 @@ on:
       - opened
       - reopened
       - synchronize
-      - ready_for_review
-      - converted_to_draft
-      - review_requested
-      - review_request_removed
-      - edited
-      - review_requested
-      - review_request_removed
-  pull_request_review:
-    types: [submitted, edited, dismissed]
-  workflow_run:
-    workflows: ["PR Review"]
-    types:
-      - completed
+
+  schedule:
+    - cron: '*/15 * * * *'  # 每15分钟检查一次
 
 jobs:
-  update-labels:
-    if: |
-      github.event_name == 'pull_request_target' ||
-      github.event_name == 'workflow_run'
+  label-management:
     runs-on: ubuntu-latest
     steps:
-      - name: Update PR labels based on reviews
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            try {
-              const { owner, repo } = context.repo;
+      - name: Checkout
+        uses: actions/checkout@v3
 
-              // 获取 PR number
-              let pr_number;
-              if (context.payload.pull_request) {
-                pr_number = context.payload.pull_request.number;
-              } else if (context.payload.workflow_run) {
-                const runId = context.payload.workflow_run.id;
-                const { data: run } = await github.rest.actions.getWorkflowRun({
-                  owner,
-                  repo,
-                  run_id: runId
-                });
-                pr_number = run.pull_requests[0].number;
-              }
+      - name: Authenticate with GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-              // 获取 PR 的所有 reviews
-              const reviews = await github.rest.pulls.listReviews({
-                owner,
-                repo,
-                pull_number: pr_number
-              });
+      - name: Add Initial Review Label
+        if: github.event_name == 'pull_request_target' && github.event.action == 'opened'
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "action:review"
 
-              // 计算最新的 approved 数量
-              const latestReviews = new Map();
-              reviews.data.forEach(review => {
-                latestReviews.set(review.user.id, review);
-              });
+  review-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-              const approvedCount = Array.from(latestReviews.values()).filter(
-                review => review.state === 'APPROVED'
-              ).length;
+      - name: Authenticate with GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-              console.log('Approved count:', approvedCount);
-
-              // 获取当前标签
-              const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
-                owner,
-                repo,
-                issue_number: pr_number
-              });
-
-              // 移除已有的 action 标签
-              const labelsToRemove = currentLabels
-                .filter(label => label.name === 'action:merge' || label.name === 'action:review')
-                .map(label => label.name);
-
-              for (const label of labelsToRemove) {
-                await github.rest.issues.removeLabel({
-                  owner,
-                  repo,
-                  issue_number: pr_number,
-                  name: label
-                });
-              }
-
-              // 添加新标签
-              const newLabel = approvedCount >= 2 ? 'action:merge' : 'action:review';
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number: pr_number,
-                labels: [newLabel]
-              });
-            } catch (error) {
-              console.error('Error:', error);
-              throw error;
-            }
+      - name: Check Reviews and Update Label
+        run: |
+          prs=$(gh pr list --state open --json number)
+          for pr in $(echo "${prs}" | jq -r '.[].number'); do
+            reviews=$(gh pr review list $pr --json state)
+            approved_count=$(echo "$reviews" | jq '[.[] | select(.state == "APPROVED")] | length')
+            if [ "$approved_count" -ge 2 ]; then
+              gh pr edit $pr --add-label "action:merge"
+            fi
+          done
