@@ -1,14 +1,32 @@
 name: PR Review
 
 on:
-  pull_request_review:
-    types: [submitted, edited, dismissed]
+  pull_request_target:
+    types: [review_requested, review_request_removed, edited]
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+  actions: read
 
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - name: Save review info
-        run: |
-          echo "PR_NUMBER=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
-          echo "REVIEW_STATE=${{ github.event.review.state }}" >> $GITHUB_ENV
+      - name: Process review
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const { owner, repo } = context.repo;
+              const pr_number = context.payload.pull_request.number;
+
+              // ... 标签处理逻辑 ...
+            } catch (error) {
+              console.error('Error:', error);
+              throw error;
+            }
