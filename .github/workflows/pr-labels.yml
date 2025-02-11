@@ -3,7 +3,7 @@ name: PR Review Labels
 on:
   pull_request_target:
     types:
-      - opened
+      - opened  # PR 创建时触发
       - reopened
       - synchronize
       - ready_for_review
@@ -11,22 +11,16 @@ on:
       - review_requested
       - review_request_removed
       - edited
-  repository_dispatch:
-    types: [pr_reviewed]
-
-permissions:
-  checks: write
-  contents: read
-  pull-requests: write
-  issues: write
-  statuses: write
-  actions: read
-  deployments: read
+  workflow_run:
+    workflows: ["PR Review"]
+    types:
+      - completed
 
 jobs:
   update-labels:
-    # 只在 PR 相关的评论时运行
-    if: ${{ github.event.issue.pull_request || github.event_name == 'pull_request_target' || github.event_name == 'repository_dispatch'}}
+    if: |
+      github.event_name == 'pull_request_target' ||
+      github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     steps:
       - name: Update PR labels based on reviews
@@ -37,16 +31,18 @@ jobs:
             try {
               const { owner, repo } = context.repo;
 
-              // 根据不同事件类型获取 PR number
+              // 获取 PR number
               let pr_number;
               if (context.payload.pull_request) {
                 pr_number = context.payload.pull_request.number;
-              } else if (context.payload.issue) {
-                pr_number = context.payload.issue.number;
-              } else if (context.payload.client_payload) {
-                pr_number = context.payload.client_payload.pr_number;
-              } else {
-                throw new Error('Cannot determine PR number');
+              } else if (context.payload.workflow_run) {
+                const runId = context.payload.workflow_run.id;
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: runId
+                });
+                pr_number = run.pull_requests[0].number;
               }
 
               // 获取 PR 的所有 reviews
@@ -56,9 +52,7 @@ jobs:
                 pull_number: pr_number
               });
 
-              console.log('All reviews:', JSON.stringify(reviews.data, null, 2));
-
-              // 计算最新的 approved 数量（每个用户只计算最新一次 review）
+              // 计算最新的 approved 数量
               const latestReviews = new Map();
               reviews.data.forEach(review => {
                 latestReviews.set(review.user.id, review);
@@ -70,7 +64,7 @@ jobs:
 
               console.log('Approved count:', approvedCount);
 
-              // 获取当前 PR 的标签
+              // 获取当前标签
               const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
                 owner,
                 repo,
@@ -91,7 +85,7 @@ jobs:
                 });
               }
 
-              // 根据 approved 数量添加对应标签
+              // 添加新标签
               const newLabel = approvedCount >= 2 ? 'action:merge' : 'action:review';
               await github.rest.issues.addLabels({
                 owner,
