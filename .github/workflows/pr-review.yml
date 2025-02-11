@@ -1,8 +1,8 @@
 name: PR Review
 
 on:
-  pull_request_review:
-    types: [submitted, edited, dismissed]
+  pull_request_target:
+    types: [review_requested, review_request_removed, edited]
 
 permissions:
   checks: write
@@ -16,11 +16,17 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - name: Save review info
+      - name: Process review
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const pr_number = context.payload.pull_request.number;
-            const review_state = context.payload.review.state;
-            console.log(`Processing PR #${pr_number} with review state: ${review_state}`);
+            try {
+              const { owner, repo } = context.repo;
+              const pr_number = context.payload.pull_request.number;
+
+              // ... 标签处理逻辑 ...
+            } catch (error) {
+              console.error('Error:', error);
+              throw error;
+            }

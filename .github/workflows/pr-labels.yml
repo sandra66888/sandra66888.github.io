@@ -3,7 +3,7 @@ name: PR Review Labels
 on:
   pull_request_target:
     types:
-      - opened  # PR 创建时触发
+      - opened
       - reopened
       - synchronize
       - ready_for_review
@@ -11,6 +11,10 @@ on:
       - review_requested
       - review_request_removed
       - edited
+      - review_requested
+      - review_request_removed
+  pull_request_review:
+    types: [submitted, edited, dismissed]
   workflow_run:
     workflows: ["PR Review"]
     types:
