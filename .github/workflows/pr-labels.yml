@@ -1,46 +1,79 @@
-name: PR Review Label
+name: PR Review Labels
 
 on:
+  schedule:
+    - cron: '*/15 * * * *' # 每15分钟运行一次
   pull_request_target:
     types:
       - opened
       - reopened
       - synchronize
 
-  schedule:
-    - cron: '*/15 * * * *'  # 每15分钟检查一次
+permissions:
+  pull-requests: write
+  issues: write
 
 jobs:
-  label-management:
+  update-labels:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Update PR labels
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const { owner, repo } = context.repo;
+              
+              // 获取所有开放的 PRs
+              const { data: prs } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'open'
+              });
 
-      - name: Authenticate with GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+              for (const pr of prs) {
+                // 获取 PR 的所有 reviews
+                const { data: reviews } = await github.rest.pulls.listReviews({
+                  owner,
+                  repo,
+                  pull_number: pr.number
+                });
 
-      - name: Add Initial Review Label
-        if: github.event_name == 'pull_request_target' && github.event.action == 'opened'
-        run: |
-          gh pr edit ${{ github.event.pull_request.number }} --add-label "action:review"
+                // 计算最新的 approved 数量
+                const latestReviews = new Map();
+                reviews.forEach(review => {
+                  latestReviews.set(review.user.id, review);
+                });
 
-  review-check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+                const approvedCount = Array.from(latestReviews.values())
+                  .filter(review => review.state === 'APPROVED')
+                  .length;
 
-      - name: Authenticate with GitHub CLI
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+                console.log(`PR #${pr.number} - Approved count:`, approvedCount);
 
-      - name: Check Reviews and Update Label
-        run: |
-          prs=$(gh pr list --state open --json number)
-          for pr in $(echo "${prs}" | jq -r '.[].number'); do
-            reviews=$(gh pr review list $pr --json state)
-            approved_count=$(echo "$reviews" | jq '[.[] | select(.state == "APPROVED")] | length')
-            if [ "$approved_count" -ge 2 ]; then
-              gh pr edit $pr --add-label "action:merge"
-            fi
-          done
+                // 获取当前标签
+                const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+                  owner,
+                  repo,
+                  issue_number: pr.number
+                });
+
+                // 保留非 action 标签
+                const labelsToKeep = currentLabels
+                  .filter(label => label.name !== 'action:merge' && label.name !== 'action:review')
+                  .map(label => label.name);
+
+                // 添加新标签
+                const newLabel = approvedCount >= 2 ? 'action:merge' : 'action:review';
+                await github.rest.issues.setLabels({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  labels: [...labelsToKeep, newLabel]
+                });
+              }
+            } catch (error) {
+              console.error('Error:', error);
+              throw error;
+            }
