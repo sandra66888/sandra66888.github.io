@@ -11,6 +11,8 @@ on:
       - review_requested
       - review_request_removed
       - edited
+  issue_comment:
+    types: [created, edited, deleted]
 
 permissions:
   checks: write
@@ -23,6 +25,8 @@ permissions:
 
 jobs:
   update-labels:
+    # 只在 PR 相关的评论时运行
+    if: ${{ github.event.issue.pull_request || github.event_name == 'pull_request_target' }}
     runs-on: ubuntu-latest
     steps:
       - name: Update PR labels based on reviews
@@ -30,50 +34,56 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { owner, repo } = context.repo;
-            // 根据事件类型获取 PR number
-            const pr_number = context.payload.pull_request
-              ? context.payload.pull_request.number
-              : context.payload.review.pull_request_number;
+            try {
+              const { owner, repo } = context.repo;
 
-            // 获取 PR 的所有 reviews
-            const reviews = await github.rest.pulls.listReviews({
-              owner,
-              repo,
-              pull_number: pr_number
-            });
+              // 根据事件类型获取 PR number
+              const pr_number = context.payload.pull_request
+                ? context.payload.pull_request.number
+                : context.payload.issue.number;
 
-            // 计算 approved 的数量
-            const approvedCount = reviews.data.filter(
-              review => review.state === 'APPROVED'
-            ).length;
+              // 获取 PR 的所有 reviews
+              const reviews = await github.rest.pulls.listReviews({
+                owner,
+                repo,
+                pull_number: pr_number
+              });
 
-            // 获取当前 PR 的标签
-            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
-              owner,
-              repo,
-              issue_number: pr_number
-            });
+              // 计算 approved 的数量
+              const approvedCount = reviews.data.filter(
+                review => review.state === 'APPROVED'
+              ).length;
 
-            // 移除已有的 action 标签
-            const labelsToRemove = currentLabels
-              .filter(label => label.name === 'action:merge' || label.name === 'action:review')
-              .map(label => label.name);
+              // 获取当前 PR 的标签
+              const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+                owner,
+                repo,
+                issue_number: pr_number
+              });
 
-            for (const label of labelsToRemove) {
-              await github.rest.issues.removeLabel({
+              // 移除已有的 action 标签
+              const labelsToRemove = currentLabels
+                .filter(label => label.name === 'action:merge' || label.name === 'action:review')
+                .map(label => label.name);
+
+              for (const label of labelsToRemove) {
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: pr_number,
+                  name: label
+                });
+              }
+
+              // 根据 approved 数量添加对应标签
+              const newLabel = approvedCount >= 2 ? 'action:merge' : 'action:review';
+              await github.rest.issues.addLabels({
                 owner,
                 repo,
                 issue_number: pr_number,
-                name: label
+                labels: [newLabel]
               });
+            } catch (error) {
+              console.error('Error:', error);
+              throw error;
             }
-
-            // 根据 approved 数量添加对应标签
-            const newLabel = approvedCount >= 2 ? 'action:merge' : 'action:review';
-            await github.rest.issues.addLabels({
-              owner,
-              repo,
-              issue_number: pr_number,
-              labels: [newLabel]
-            });
