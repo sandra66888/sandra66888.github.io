@@ -4,7 +4,7 @@ date: 2023-01-01
 author: John Doe
 tags: [markdown, blogging, tutorial]
 lang: zh-CN
-description: 页面的描述1
+description: 页面的描述
 ---
 <!-- 相对路径 -->
 <!-- test -->
